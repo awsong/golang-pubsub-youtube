@@ -8,13 +8,12 @@ import (
 
 const (
 	PUBLISH     = "publish"
-	SUBSCRIBE   = "subscribe"
-	UNSUBSCRIBE = "unsubscribe"
+	VOTE   = "vote"
+	REFRESH = "refresh"
 )
 
 type PubSub struct {
 	Clients       []Client
-	Subscriptions []Subscription
 }
 
 type Client struct {
@@ -24,13 +23,86 @@ type Client struct {
 
 type Message struct {
 	Action  string          `json:"action"`
-	Topic   string          `json:"topic"`
 	Message json.RawMessage `json:"message"`
 }
 
-type Subscription struct {
-	Topic  string
-	Client *Client
+type Option struct{
+	Count int    `json:"y"`
+	Label string `json:"label"`
+}
+type Question struct{
+	Title string `json:"title"`
+	Options []Option `json:"options"`
+	VoteMap map[string]bool `json:"voteMap"`
+	Voted bool `json:"voted"`
+}
+type survey struct{
+	active bool
+	current int
+	questions []Question
+}
+
+var s = survey{
+	active:  true,
+	current: 0,
+	questions: []Question{
+		Question{
+			Title: "用过git么",
+			Options: []Option{
+				Option{
+					Count: 0,
+					Label: "没用过",
+				},
+				Option{
+					Count: 0,
+					Label: "用过",
+				},
+			},
+			VoteMap: map[string]bool{},
+			Voted:   false,
+		},
+		Question{
+			Title: "接触过项目管理么",
+			Options: []Option{
+				Option{
+					Count: 0,
+					Label: "没接触过",
+				},
+				Option{
+					Count: 0,
+					Label: "接触过",
+				},
+			},
+			VoteMap: map[string]bool{},
+			Voted:   false,
+		},
+	},
+}
+
+func (ps *PubSub) Next() (*PubSub) {
+	s.current = (s.current+1) % len(s.questions)
+	return ps
+}
+func (ps *PubSub) Prev() (*PubSub) {
+	s.current = (s.current-1) % len(s.questions)
+	return ps
+}
+func (ps *PubSub) Vote(client Client, v []int) (*PubSub) {
+	q := s.questions[s.current]
+	for _, o := range v {
+		q.Options[o].Count ++
+	}
+	q.VoteMap[client.Id] = true
+//	ps.Refresh(client)
+	ps.Publish()
+	return ps
+}
+func (ps *PubSub) Refresh(client Client) (*PubSub) {
+	q := s.questions[s.current]
+	q.Voted = q.VoteMap[client.Id]
+	rawMsg, _ := json.Marshal(q)
+	client.Send(rawMsg)
+	return ps
 }
 
 func (ps *PubSub) AddClient(client Client) (*PubSub) {
@@ -49,16 +121,6 @@ func (ps *PubSub) AddClient(client Client) (*PubSub) {
 }
 
 func (ps *PubSub) RemoveClient(client Client) (*PubSub) {
-
-	// first remove all subscriptions by this client
-
-	for index, sub := range ps.Subscriptions {
-
-		if client.Id == sub.Client.Id {
-			ps.Subscriptions = append(ps.Subscriptions[:index], ps.Subscriptions[index+1:]...)
-		}
-	}
-
 	// remove client from the list
 
 	for index, c := range ps.Clients {
@@ -72,81 +134,21 @@ func (ps *PubSub) RemoveClient(client Client) (*PubSub) {
 	return ps
 }
 
-func (ps *PubSub) GetSubscriptions(topic string, client *Client) ([]Subscription) {
+func (ps *PubSub) Publish() {
 
-	var subscriptionList []Subscription
+	for _, client := range ps.Clients {
 
-	for _, subscription := range ps.Subscriptions {
-
-		if client != nil {
-
-			if subscription.Client.Id == client.Id && subscription.Topic == topic {
-				subscriptionList = append(subscriptionList, subscription)
-
-			}
-		} else {
-
-			if subscription.Topic == topic {
-				subscriptionList = append(subscriptionList, subscription)
-			}
-		}
-	}
-
-	return subscriptionList
-}
-
-func (ps *PubSub) Subscribe(client *Client, topic string) (*PubSub) {
-
-	clientSubs := ps.GetSubscriptions(topic, client)
-
-	if len(clientSubs) > 0 {
-
-		// client is subscribed this topic before
-
-		return ps
-	}
-
-	newSubscription := Subscription{
-		Topic:  topic,
-		Client: client,
-	}
-
-	ps.Subscriptions = append(ps.Subscriptions, newSubscription)
-
-	return ps
-}
-
-func (ps *PubSub) Publish(topic string, message []byte, excludeClient *Client) {
-
-	subscriptions := ps.GetSubscriptions(topic, nil)
-
-	for _, sub := range subscriptions {
-
-		fmt.Printf("Sending to client id %s message is %s \n", sub.Client.Id, message)
+		fmt.Printf("Sending to client id %s message is %s \n", client.Id)
 		//sub.Client.Connection.WriteMessage(1, message)
 
-		sub.Client.Send(message)
+		//client.Send(message)
+		ps.Refresh(client)
 	}
 
 }
 func (client *Client) Send(message [] byte) (error) {
 
 	return client.Connection.WriteMessage(1, message)
-
-}
-
-func (ps *PubSub) Unsubscribe(client *Client, topic string) (*PubSub) {
-
-	//clientSubscriptions := ps.GetSubscriptions(topic, client)
-	for index, sub := range ps.Subscriptions {
-
-		if sub.Client.Id == client.Id && sub.Topic == topic {
-			// found this subscription from client and we do need remove it
-			ps.Subscriptions = append(ps.Subscriptions[:index], ps.Subscriptions[index+1:]...)
-		}
-	}
-
-	return ps
 
 }
 
@@ -162,27 +164,28 @@ func (ps *PubSub) HandleReceiveMessage(client Client, messageType int, payload [
 
 	switch m.Action {
 
+	case REFRESH:
+
+		fmt.Println("This is refresh")
+
+		ps.Refresh(client)
+
+		break
+	case VOTE:
+
+
+		var v []int
+		json.Unmarshal(m.Message, &v)
+		fmt.Println("This is vote", v, "from: ", client.Id)
+
+		ps.Vote(client, v)
+
+		break
 	case PUBLISH:
 
 		fmt.Println("This is publish new message")
 
-		ps.Publish(m.Topic, m.Message, nil)
-
-		break
-
-	case SUBSCRIBE:
-
-		ps.Subscribe(&client, m.Topic)
-
-		fmt.Println("new subscriber to topic", m.Topic, len(ps.Subscriptions), client.Id)
-
-		break
-
-	case UNSUBSCRIBE:
-
-		fmt.Println("Client want to unsubscribe the topic", m.Topic, client.Id)
-
-		ps.Unsubscribe(&client, m.Topic)
+		ps.Publish()
 
 		break
 

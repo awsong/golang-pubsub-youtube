@@ -1,11 +1,10 @@
 package main
 
 import (
-	"net/http"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
-	"github.com/satori/go.uuid"
+	"net/http"
 	"pubsub/pubsub"
 )
 
@@ -14,10 +13,6 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func autoId() (string) {
-
-	return uuid.Must(uuid.NewV4()).String()
-}
 
 var ps = &pubsub.PubSub{}
 
@@ -35,7 +30,8 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 
 	client := pubsub.Client{
-		Id:         autoId(),
+		//Id:         strings.Split(r.RemoteAddr,":")[0],
+		Id:         r.RemoteAddr,
 		Connection: conn,
 	}
 
@@ -50,7 +46,7 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println("Something went wrong", err)
 
 			ps.RemoveClient(client)
-			log.Println("total clients and subscriptions ", len(ps.Clients), len(ps.Subscriptions))
+			log.Println("total clients and subscriptions ", len(ps.Clients))
 
 
 			return
@@ -69,10 +65,18 @@ func main() {
 		http.ServeFile(w, r, "static")
 
 	})
+	http.HandleFunc("/control/next", func(w http.ResponseWriter, r *http.Request) {
+		ps.Next()
+		ps.Publish()
+	})
 
+	http.HandleFunc("/control/prev", func(w http.ResponseWriter, r *http.Request) {
+		ps.Prev()
+		ps.Publish()
+	})
 	http.HandleFunc("/ws", websocketHandler)
 
-	http.ListenAndServe(":3000", nil)
+	_ = http.ListenAndServe(":3000", nil)
 
 	fmt.Println("Server is running: http://localhost:3000")
 
