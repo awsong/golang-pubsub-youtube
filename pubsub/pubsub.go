@@ -42,41 +42,29 @@ type survey struct{
 	questions []Question
 }
 
+func qGen() []Question{
+	var qs = []Question{}
+	for _, q := range qList{
+		var os = []Option{};
+		for  _, o := range q[1:] {
+			os = append(os, Option{
+				Count: 0,
+				Label: o,
+			})
+		}
+		qs = append(qs, Question{
+			Title: q[0],
+			Options: os,
+			VoteMap: map[string]bool{},
+			Voted:   false,
+		})
+	}
+	return qs
+}
 var s = survey{
 	active:  true,
 	current: 0,
-	questions: []Question{
-		Question{
-			Title: "用过git么",
-			Options: []Option{
-				Option{
-					Count: 0,
-					Label: "没用过",
-				},
-				Option{
-					Count: 0,
-					Label: "用过",
-				},
-			},
-			VoteMap: map[string]bool{},
-			Voted:   false,
-		},
-		Question{
-			Title: "接触过项目管理么",
-			Options: []Option{
-				Option{
-					Count: 0,
-					Label: "没接触过",
-				},
-				Option{
-					Count: 0,
-					Label: "接触过",
-				},
-			},
-			VoteMap: map[string]bool{},
-			Voted:   false,
-		},
-	},
+	questions: qGen(),
 }
 
 func (ps *PubSub) Next() (*PubSub) {
