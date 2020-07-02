@@ -48,7 +48,6 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 			ps.RemoveClient(client)
 			log.Println("total clients and subscriptions ", len(ps.Clients))
 
-
 			return
 		}
 
