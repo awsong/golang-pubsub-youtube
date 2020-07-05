@@ -50,6 +50,8 @@
         }
 
         ws.onclose = () => {
+            $('#release').prop("disabled", true);
+            $('#release').html("链接已断开，请刷新页面");
             console.log("Diconnected");
         }
 
