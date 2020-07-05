@@ -144,6 +144,8 @@ func (ps *PubSub) HandleReceiveMessage(client Client, messageType int, payload [
 	case RELEASE:
 		fmt.Println("This is release new message: ", string(m.Message))
 		json.Unmarshal(m.Message, &q)
+		q.Voted = false
+		q.VoteMap = make(map[string]bool)
 		fmt.Println(q)
 		ps.Publish()
 
