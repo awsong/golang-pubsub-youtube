@@ -2,17 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"pubsub/pubsub"
+
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }
-
 
 var ps = &pubsub.PubSub{}
 
@@ -27,7 +27,6 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-
 
 	client := pubsub.Client{
 		//Id:         strings.Split(r.RemoteAddr,":")[0],
@@ -60,18 +59,10 @@ func websocketHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-
 		http.ServeFile(w, r, "static")
-
 	})
-	http.HandleFunc("/control/next", func(w http.ResponseWriter, r *http.Request) {
-		ps.Next()
-		ps.Publish()
-	})
-
-	http.HandleFunc("/control/prev", func(w http.ResponseWriter, r *http.Request) {
-		ps.Prev()
-		ps.Publish()
+	http.HandleFunc("/static/control", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "static/control.html")
 	})
 	http.HandleFunc("/ws", websocketHandler)
 
